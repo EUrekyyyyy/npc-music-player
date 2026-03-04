@@ -3057,7 +3057,10 @@ function loadTrack(index) {
   avatarImg.src = track.avatar;
   bgLayer.style.backgroundImage = `url('${track.avatar}')`;
   renderLyrics(track.lyrics);
-  renderPlaylist();
+  // Only re-render playlist if panel is visible
+  if (document.getElementById('playlistPanel').classList.contains('show')) {
+    renderPlaylist();
+  }
   updateLockMarker();
 }
 
@@ -3207,6 +3210,7 @@ function togglePlaylist() {
     panel.classList.remove('show');
     overlay.classList.remove('show');
   } else {
+    renderPlaylist();
     panel.classList.add('show');
     overlay.classList.add('show');
   }
