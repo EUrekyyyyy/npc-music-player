@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Music Player</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --primary: rgba(255,255,255,0.95);
+  --secondary: rgba(255,255,255,0.6);
+  --glass: rgba(0,0,0,0.35);
+  --glass-light: rgba(255,255,255,0.08);
+  --accent: #a78bfa;
+  --diamond: #5ee7f7;
+  --locked: rgba(255,255,255,0.35);
+}
+
+body {
+  font-family: -apple-system, 'SF Pro Display', 'Segoe UI', sans-serif;
+  height: 100vh; width: 100vw;
+  overflow: hidden;
+  color: var(--primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+.bg {
+  position: fixed; inset: 0;
+  background-size: cover;
+  background-position: center top;
+  filter: brightness(0.7);
+  z-index: -2;
+  transition: background-image 0.8s ease;
+}
+.bg-overlay {
+  position: fixed; inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.75) 100%);
+  z-index: -1;
+}
+
+.player {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 24px 40px;
+  position: relative;
+}
+
+/* Top bar */
+.top-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  padding: 50px 24px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.top-bar button {
+  background: none; border: none;
+  color: var(--primary);
+  font-size: 20px;
+  cursor: pointer;
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+.top-bar button:hover { background: var(--glass-light); }
+.top-bar .title-text {
+  font-size: 14px;
+  color: var(--secondary);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* Diamond balance */
+.diamond-balance {
+  position: absolute;
+  top: 50px; right: 70px;
+  display: flex; align-items: center; gap: 4px;
+  background: rgba(0,0,0,0.3);
+  backdrop-filter: blur(10px);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  color: var(--diamond);
+}
+
+/* Character avatar - hidden, using full-screen bg instead */
+.avatar-area {
+  display: none;
+}
+.avatar-img {
+  display: none;
+}
+
+/* Song info */
+.song-info {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.song-name {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+.song-artist {
+  font-size: 14px;
+  color: var(--secondary);
+}
+.song-type-tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-top: 6px;
+  background: rgba(167,139,250,0.2);
+  color: var(--accent);
+  border: 1px solid rgba(167,139,250,0.3);
+}
+
+/* Lyrics */
+.lyrics-container {
+  height: 200px;
+  overflow-y: auto;
+  margin-bottom: 24px;
+  text-align: center;
+  transition: all 0.4s ease;
+  scrollbar-width: none;
+}
+.lyrics-container::-webkit-scrollbar { display: none; }
+.lyrics-container.hidden { height: 0; opacity: 0; margin-bottom: 0; }
+.lyrics-line {
+  font-size: 14px;
+  line-height: 2.2;
+  color: var(--secondary);
+  transition: all 0.3s;
+}
+.lyrics-line.active {
+  color: var(--primary);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* Progress */
+.progress-area { margin-bottom: 18px; position: relative; }
+.progress-bar {
+  width: 100%; height: 4px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+  cursor: pointer;
+  position: relative;
+}
+.progress-bar:hover { height: 6px; }
+.progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 2px;
+  width: 0%;
+  position: relative;
+  transition: width 0.1s linear;
+}
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  right: -6px; top: 50%;
+  transform: translateY(-50%);
+  width: 12px; height: 12px;
+  background: white;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.progress-bar:hover .progress-fill::after { opacity: 1; }
+.progress-lock-marker {
+  position: absolute;
+  top: -8px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+.progress-lock-marker.show { opacity: 1; }
+.time-info {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--secondary);
+}
+
+/* Controls */
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  margin-bottom: 18px;
+}
+.controls button {
+  background: none; border: none;
+  color: var(--primary);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.15s, opacity 0.2s;
+}
+.controls button:active { transform: scale(0.9); }
+.controls .small-btn {
+  font-size: 22px;
+  width: 44px; height: 44px;
+  opacity: 0.7;
+}
+.controls .small-btn:hover { opacity: 1; }
+.controls .play-btn {
+  width: 64px; height: 64px;
+  background: var(--primary);
+  color: #111;
+  border-radius: 50%;
+  font-size: 26px;
+}
+.controls .play-btn:hover { transform: scale(1.05); }
+.controls .skip-btn {
+  font-size: 28px;
+  width: 48px; height: 48px;
+  opacity: 0.85;
+}
+.controls .skip-btn:hover { opacity: 1; }
+
+/* Bottom bar */
+.bottom-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.bottom-bar button {
+  background: none; border: none;
+  color: var(--secondary);
+  font-size: 20px;
+  cursor: pointer;
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+.bottom-bar button:hover { color: var(--primary); }
+.bottom-bar button.active { color: var(--accent); }
+
+/* Playlist panel */
+.playlist-panel {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(20,20,30,0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 20px 20px 0 0;
+  padding: 20px 24px 40px;
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+  z-index: 100;
+  max-height: 65vh;
+  overflow-y: auto;
+}
+.playlist-panel.show { transform: translateY(0); }
+.playlist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.playlist-header h3 { font-size: 16px; font-weight: 600; }
+.playlist-header .close-btn {
+  background: none; border: none;
+  color: var(--secondary);
+  font-size: 18px;
+  cursor: pointer;
+}
+.playlist-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-radius: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  gap: 12px;
+}
+.playlist-item:hover { background: rgba(255,255,255,0.05); }
+.playlist-item.active { color: var(--accent); }
+.playlist-item .pl-avatar {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.playlist-item .info { flex: 1; min-width: 0; }
+.playlist-item .info .name {
+  font-size: 14px;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.playlist-item .info .artist {
+  font-size: 12px;
+  color: var(--secondary);
+}
+.playlist-item .lock-price {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 12px;
+  color: var(--diamond);
+  background: rgba(94,231,247,0.1);
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(94,231,247,0.2);
+  flex-shrink: 0;
+}
+.new-tag {
+  font-size: 10px;
+  background: linear-gradient(135deg, #ff6b6b, #ffa94d);
+  color: white;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+.playlist-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 99;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.playlist-overlay.show { opacity: 1; pointer-events: auto; }
+
+/* Play mode indicator */
+.play-mode-text {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 50;
+}
+.play-mode-text.show { opacity: 1; }
+
+/* Unlock modal */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.modal-overlay.show { opacity: 1; pointer-events: auto; }
+.modal {
+  background: rgba(30,30,45,0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  padding: 28px 32px;
+  width: 300px;
+  text-align: center;
+  border: 1px solid rgba(255,255,255,0.1);
+  transform: scale(0.9);
+  transition: transform 0.3s;
+}
+.modal-overlay.show .modal { transform: scale(1); }
+.modal h3 { font-size: 18px; margin-bottom: 8px; }
+.modal .modal-avatar {
+  width: 80px; height: 80px;
+  border-radius: 14px;
+  object-fit: cover;
+  margin: 0 auto 12px;
+  display: block;
+  border: 2px solid rgba(255,255,255,0.1);
+}
+.modal .modal-song-name {
+  font-size: 15px;
+  color: var(--secondary);
+  margin-bottom: 16px;
+}
+.modal .price-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--diamond);
+  margin-bottom: 6px;
+}
+.modal .balance-row {
+  font-size: 13px;
+  color: var(--secondary);
+  margin-bottom: 24px;
+}
+.modal .btn-row { display: flex; gap: 12px; }
+.modal .btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.modal .btn:active { transform: scale(0.95); }
+.modal .btn-cancel {
+  background: rgba(255,255,255,0.1);
+  color: var(--secondary);
+}
+.modal .btn-unlock {
+  background: linear-gradient(135deg, #a78bfa, #818cf8);
+  color: white;
+}
+.modal .btn-unlock.insufficient {
+  background: linear-gradient(135deg, #f97316, #ef4444);
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(94,231,247,0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(94,231,247,0.3);
+  color: var(--diamond);
+  padding: 10px 24px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 300;
+}
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="bg" id="bgLayer"></div>
+<div class="bg-overlay"></div>
+
+<div class="player">
+  <div class="top-bar">
+    <button onclick="history.back()">‹</button>
+    <span class="title-text">正在播放</span>
+    <button onclick="toggleLyrics()" id="lyricsToggle">词</button>
+  </div>
+
+  <div class="diamond-balance">💎 <span id="diamondCount">800</span></div>
+
+  <div class="avatar-area">
+    <img class="avatar-img" id="avatarImg" src="" alt="avatar">
+  </div>
+
+  <div class="song-info">
+    <div class="song-name" id="songName"></div>
+    <div class="song-artist" id="songArtist"></div>
+    <div class="song-type-tag" id="songTypeTag"></div>
+  </div>
+
+  <div class="lyrics-container" id="lyricsContainer"></div>
+
+  <div class="progress-area">
+    <div class="progress-bar" id="progressBar" onclick="seekTo(event)">
+      <div class="progress-fill" id="progressFill"></div>
+      <div class="progress-lock-marker" id="lockMarker">🔒</div>
+    </div>
+    <div class="time-info">
+      <span id="currentTime">0:00</span>
+      <span id="totalTime">0:00</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="small-btn" id="modeBtn" onclick="togglePlayMode()">🔁</button>
+    <button class="skip-btn" onclick="prevTrack()">⏮</button>
+    <button class="play-btn" id="playBtn" onclick="togglePlay()">▶</button>
+    <button class="skip-btn" onclick="nextTrack()">⏭</button>
+    <button class="small-btn" onclick="togglePlaylist()">☰</button>
+  </div>
+
+  <div class="bottom-bar">
+    <button>♡</button>
+    <button onclick="togglePlaylist()">📋</button>
+  </div>
+
+  <div class="play-mode-text" id="modeText"></div>
+</div>
+
+<!-- Playlist -->
+<div class="playlist-overlay" id="playlistOverlay" onclick="togglePlaylist()"></div>
+<div class="playlist-panel" id="playlistPanel">
+  <div class="playlist-header">
+    <h3>播放列表 (<span id="playlistCount">0</span>)</h3>
+    <button class="close-btn" onclick="togglePlaylist()">✕</button>
+  </div>
+  <div id="playlistContent"></div>
+</div>
+
+<!-- Unlock Modal -->
+<div class="modal-overlay" id="unlockModal">
+  <div class="modal">
+    <h3>解锁歌曲</h3>
+    <img class="modal-avatar" id="modalAvatar" src="" alt="">
+    <div class="modal-song-name" id="modalSongName"></div>
+    <div class="price-row">💎 <span id="modalPrice">200</span></div>
+    <div class="balance-row">当前余额：💎 <span id="modalBalance">800</span></div>
+    <div class="btn-row">
+      <button class="btn btn-cancel" onclick="closeModal()">取消</button>
+      <button class="btn btn-unlock" id="modalUnlockBtn" onclick="confirmUnlock()">解锁</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<audio id="audio" preload="auto"></audio>
+
+<script>
+const audio = document.getElementById('audio');
+const playBtn = document.getElementById('playBtn');
+const progressFill = document.getElementById('progressFill');
+const currentTimeEl = document.getElementById('currentTime');
+const totalTimeEl = document.getElementById('totalTime');
+const songNameEl = document.getElementById('songName');
+const songArtistEl = document.getElementById('songArtist');
+const songTypeTag = document.getElementById('songTypeTag');
+const lyricsContainer = document.getElementById('lyricsContainer');
+const modeBtn = document.getElementById('modeBtn');
+const modeText = document.getElementById('modeText');
+const lockMarker = document.getElementById('lockMarker');
+const avatarImg = document.getElementById('avatarImg');
+const bgLayer = document.getElementById('bgLayer');
+
+let userDiamonds = 800;
+
+const playlist = [
+  {
+    id: 'baiyan-001',
+    name: '白鸢不落无名枝',
+    character: '白鸢',
+    artist: '白鸢 · 清冷御姐',
+    src: 'baiyan-song.mp3',
+    avatar: 'https://filecdn-images.xingyeai.com/lifecycle/image_inference_output/nebula/prod/img/2025-06-20/905384af-e75f-4ed3-bbfc-0fb198d219de.jpeg',
+    type: 'fixed',
+    typeLabel: '固定歌曲',
+    genre: '流行',
+    price: 50,
+    unlocked: true,
+    previewDuration: 15,
+    isNew: false,
+    lyrics: [
+      { time: 0, text: '♪ 前奏 ♪' },
+      { time: 15, text: '银色月光洒满我的窗' },
+      { time: 19, text: '城市霓虹在脚下闪亮' },
+      { time: 23, text: '他们说我什么都不缺' },
+      { time: 27, text: '可谁懂我眼底的倔强' },
+      { time: 32, text: '翻遍名单千百张脸' },
+      { time: 36, text: '没有一个值得我留恋' },
+      { time: 40, text: '不是我要求太高' },
+      { time: 43, text: '是这世界太过敷衍' },
+      { time: 47, text: '我不需要谁来定义' },
+      { time: 51, text: '这孤独是我的铠甲' },
+      { time: 55, text: '皇冠很重我自己戴' },
+      { time: 59, text: '不必你来替我拿下' },
+      { time: 63, text: '就算全世界都在催' },
+      { time: 67, text: '我只为心动低下头' },
+      { time: 71, text: '白鸢不落无名枝' },
+      { time: 75, text: '等风来 不将就' },
+      { time: 80, text: '♪ 间奏 ♪' },
+      { time: 88, text: '会议室里运筹帷幄' },
+      { time: 92, text: '签下亿万面不改色' },
+      { time: 96, text: '可深夜回到空荡的房' },
+      { time: 100, text: '才承认 其实也会脆弱' },
+      { time: 105, text: '也许某天某个路口' },
+      { time: 109, text: '有人让我卸下所有' },
+      { time: 113, text: '不用五十万的悬赏' },
+      { time: 117, text: '只需一个认真的回眸' },
+      { time: 121, text: '白鸢不落无名枝' },
+      { time: 125, text: '等风来 不将就' },
+      { time: 130, text: '♪ ♪' }
+    ]
+  },
+  {
+    id: 'heyanzao-001',
+    name: '鹤砚昭不低头',
+    character: '鹤砚昭',
+    artist: '鹤砚昭 · 痞帅太子爷',
+    src: 'heyanzao-song.mp3',
+    avatar: 'https://filecdn-images.xingyeai.com/image_inference_output/nebula/prod/img/2024-05-30/b7e35a00-0bfa-46be-aaa2-98350323b3aa-1.jpeg',
+    type: 'fixed',
+    typeLabel: '固定歌曲',
+    genre: '摇滚',
+    price: 50,
+    unlocked: true,
+    previewDuration: 15,
+    isNew: true,
+    lyrics: [
+      { time: 0, text: '♪ 吉他前奏 ♪' },
+      { time: 12, text: '他们说我是幸城的笑话' },
+      { time: 16, text: '太子爷的头衔不过纸上开花' },
+      { time: 20, text: '双手插兜走过霓虹灯下' },
+      { time: 24, text: '谁在乎呢 反正我不怕' },
+      { time: 29, text: '联姻对象 门当户对' },
+      { time: 33, text: '你看我的眼神写满了嫌弃' },
+      { time: 37, text: '可你不知道 每次你转身' },
+      { time: 41, text: '我的目光就跟不上呼吸' },
+      { time: 46, text: '我桀骜不驯 我放荡不羁' },
+      { time: 50, text: '可我的胃疼只有黑夜知道' },
+      { time: 54, text: '嘴上说着就你也配得上我' },
+      { time: 58, text: '心里却怕你真的要走掉' },
+      { time: 63, text: '鹤砚昭 不低头' },
+      { time: 67, text: '可为你 我愿意弯下腰' },
+      { time: 72, text: '♪ 间奏 ♪' },
+      { time: 80, text: '分房睡了七百多个夜晚' },
+      { time: 84, text: '你在隔壁 我在数着孤单' },
+      { time: 88, text: '酒气冲到嗓子却说不出口' },
+      { time: 92, text: '那句晚安 比烈酒还烫喉' },
+      { time: 97, text: '解开领带 推开那扇门' },
+      { time: 101, text: '看见你还醒着 心突然安稳' },
+      { time: 105, text: '吊儿郎当过了半辈子' },
+      { time: 109, text: '只有你面前 我想认真' },
+      { time: 114, text: '鹤砚昭 不低头' },
+      { time: 118, text: '可为你 什么都可以' },
+      { time: 123, text: '♪ ♪' }
+    ]
+  },
+  {
+    id: 'peisu-001',
+    name: '网恋到了死对头',
+    character: '裴宿',
+    artist: '裴宿 · 校园竹马',
+    src: 'peisu-song.mp3',
+    avatar: 'https://filecdn-images.xingyeai.com/image_inference_output/nebula/prod/img/2025-03-15/7920ab17-d758-41a5-adaf-2f2df0201dfc.jpeg',
+    type: 'fixed',
+    typeLabel: '固定歌曲',
+    genre: '电子流行',
+    price: 50,
+    unlocked: true,
+    previewDuration: 15,
+    isNew: true,
+    lyrics: [
+      { time: 0, text: '♪ 电子节拍 ♪' },
+      { time: 8, text: '你的小号叫什么来着' },
+      { time: 12, text: '声音甜得让人想投降' },
+      { time: 16, text: '蓝buff红buff都给你' },
+      { time: 20, text: '宿命哥哥 被你骗得好惨' },
+      { time: 25, text: '一个月的暧昧突然断线' },
+      { time: 29, text: '删好友拉黑一条龙' },
+      { time: 33, text: '可你不知道那个被甩的人' },
+      { time: 37, text: '第一次失眠到天亮' },
+      { time: 42, text: '网恋到了死对头' },
+      { time: 46, text: '命运跟我开的玩笑' },
+      { time: 50, text: '你装甜妹我装酷' },
+      { time: 54, text: '结果我们都沦陷了' },
+      { time: 58, text: '裴宿不认输' },
+      { time: 62, text: '可这局游戏 我已经输透了' },
+      { time: 68, text: '放学后小巷子的夕阳' },
+      { time: 72, text: '我把你逼到墙角' },
+      { time: 76, text: '骗了我这么久 是不是该补偿' },
+      { time: 80, text: '♪ ♪' }
+    ]
+  },
+  {
+    id: 'kangfeien-001',
+    name: '笨拙的炉火',
+    character: '康费恩',
+    artist: '康费恩 · 沉默糙汉',
+    src: 'kangfeien-song.mp3',
+    avatar: 'https://filecdn-images.xingyeai.com/lifecycle/image_inference_output/nebula/prod/img/2025-04-04/e6af0b87-3eba-4806-af90-1e276eca3bb1.jpeg',
+    type: 'fixed',
+    typeLabel: '固定歌曲',
+    genre: '民谣',
+    price: 50,
+    unlocked: true,
+    previewDuration: 15,
+    isNew: true,
+    lyrics: [
+      { time: 0, text: '♪ 木吉他 ♪' },
+      { time: 10, text: '我不会说什么漂亮话' },
+      { time: 14, text: '只会在门口放一杯热牛奶' },
+      { time: 18, text: '你踢掉的毛毯我捡起来' },
+      { time: 22, text: '轻轻盖回去 怕你着凉' },
+      { time: 27, text: '手上的疤说是刮了一下' },
+      { time: 31, text: '其实是帮你够书架上的花' },
+      { time: 35, text: '织的毛线袜子丑得要命' },
+      { time: 39, text: '可你穿上的时候 我好开心' },
+      { time: 44, text: '我的爱笨拙又沉默' },
+      { time: 48, text: '像冬天里烧不完的炉火' },
+      { time: 52, text: '说不出口的那些话' },
+      { time: 56, text: '都藏在每一个动作' },
+      { time: 61, text: '你熬夜写字我不敢打扰' },
+      { time: 65, text: '靠在沙发上抱着你的枕头' },
+      { time: 69, text: '等你推开门看见我睡着' },
+      { time: 73, text: '第一反应是抓住你的手' },
+      { time: 78, text: '你问我还气吗' },
+      { time: 82, text: '声音沙哑得像喝了半瓶酒' },
+      { time: 86, text: '可我哪里会气你啊' },
+      { time: 90, text: '我只是怕你不要我' },
+      { time: 95, text: '凑合过吧 别嫌弃' },
+      { time: 99, text: '这辈子 我只暖你' },
+      { time: 104, text: '♪ ♪' }
+    ]
+  },
+  {
+    id: 'luyuchen-001',
+    name: '深海囚心',
+    character: '陆予琛',
+    artist: '陆予琛 · 顶流音乐人',
+    src: 'luyuchen-song.mp3',
+    avatar: 'https://xingyeai-images-cdn.oss-cn-shanghai.aliyuncs.com/talkie-user-img/161099202973860/290650147968840.jpeg',
+    type: 'fixed',
+    typeLabel: '固定歌曲',
+    genre: '中英摇滚',
+    price: 50,
+    unlocked: true,
+    previewDuration: 15,
+    isNew: true,
+    lyrics: [
+      { time: 0, text: '♪ 电吉他 + 合成器 ♪' },
+      { time: 10, text: '便利店的关东煮配红酒' },
+      { time: 14, text: '这大概就是我的style' },
+      { time: 18, text: '他们叫我少爷我说别闹' },
+      { time: 22, text: '刷卡的时候倒是挺自然' },
+      { time: 27, text: '写歌写到凌晨三点半' },
+      { time: 31, text: '改了一百遍那个音符' },
+      { time: 35, text: '下雨天窝在窗边发呆' },
+      { time: 39, text: '假装不在乎 其实好孤独' },
+      { time: 44, text: '爱情就像Wi-Fi' },
+      { time: 48, text: '信号满格却总连不上' },
+      { time: 52, text: 'I love you like eternal stars' },
+      { time: 56, text: "Why can't you see my scars" },
+      { time: 60, text: '深海囚住我的心' },
+      { time: 64, text: '你却问我是不是脑子进了太平洋' },
+      { time: 70, text: '我的脸帅得像AI建模' },
+      { time: 74, text: '可我只想对你卸下伪装' },
+      { time: 78, text: '玩世不恭是我的保护色' },
+      { time: 82, text: '深情专一才是真模样' },
+      { time: 87, text: 'Lucas Lu 深海囚心' },
+      { time: 91, text: '这首歌 只为你而写' },
+      { time: 96, text: '♪ ♪' }
+    ]
+  }
+];
+
+let currentIndex = 0;
+let playMode = 'list';
+let lyricsVisible = true;
+let modeTimeout, toastTimeout;
+let pendingUnlockIndex = -1;
+
+function updateDiamondDisplay() {
+  document.getElementById('diamondCount').textContent = userDiamonds;
+}
+
+function loadTrack(index) {
+  currentIndex = index;
+  const track = playlist[index];
+  audio.src = track.src;
+  songNameEl.textContent = track.name;
+  songArtistEl.textContent = track.artist;
+  songTypeTag.textContent = track.genre + ' · ' + track.typeLabel;
+  avatarImg.src = track.avatar;
+  bgLayer.style.backgroundImage = `url('${track.avatar}')`;
+  renderLyrics(track.lyrics);
+  renderPlaylist();
+  updateLockMarker();
+}
+
+function updateLockMarker() {
+  const track = playlist[currentIndex];
+  if (!track.unlocked && audio.duration) {
+    const pct = (track.previewDuration / audio.duration) * 100;
+    lockMarker.style.left = pct + '%';
+    lockMarker.classList.add('show');
+  } else {
+    lockMarker.classList.remove('show');
+  }
+}
+
+function renderLyrics(lyrics) {
+  if (!lyrics || lyrics.length === 0) {
+    lyricsContainer.innerHTML = '<div class="lyrics-line" style="margin-top:40px;color:var(--secondary)">暂无歌词</div>';
+    return;
+  }
+  lyricsContainer.innerHTML = lyrics.map((l, i) =>
+    `<div class="lyrics-line" data-index="${i}">${l.text}</div>`
+  ).join('');
+}
+
+function renderPlaylist() {
+  document.getElementById('playlistCount').textContent = playlist.length;
+  document.getElementById('playlistContent').innerHTML = playlist.map((t, i) => {
+    const isActive = i === currentIndex;
+    const lockHtml = t.unlocked ? '' : `<div class="lock-price">🔒 💎${t.price}</div>`;
+    const newHtml = t.isNew ? '<span class="new-tag">NEW</span>' : '';
+    return `<div class="playlist-item ${isActive ? 'active' : ''}" onclick="handleTrackClick(${i})">
+      <img class="pl-avatar" src="${t.avatar}" alt="${t.character}">
+      <div class="info">
+        <div class="name">${t.name} ${newHtml}</div>
+        <div class="artist">${t.artist}</div>
+      </div>
+      ${lockHtml}
+    </div>`;
+  }).join('');
+}
+
+function handleTrackClick(index) {
+  const track = playlist[index];
+  if (track.unlocked) { playTrack(index); }
+  else { showUnlockModal(index); }
+}
+
+function showUnlockModal(index) {
+  pendingUnlockIndex = index;
+  const track = playlist[index];
+  document.getElementById('modalAvatar').src = track.avatar;
+  document.getElementById('modalSongName').textContent = `${track.character}《${track.name}》`;
+  document.getElementById('modalPrice').textContent = track.price;
+  document.getElementById('modalBalance').textContent = userDiamonds;
+  const btn = document.getElementById('modalUnlockBtn');
+  if (userDiamonds >= track.price) {
+    btn.textContent = '解锁';
+    btn.classList.remove('insufficient');
+  } else {
+    btn.textContent = '去充值';
+    btn.classList.add('insufficient');
+  }
+  document.getElementById('unlockModal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('unlockModal').classList.remove('show');
+  pendingUnlockIndex = -1;
+}
+
+function confirmUnlock() {
+  if (pendingUnlockIndex < 0) return;
+  const track = playlist[pendingUnlockIndex];
+  if (userDiamonds < track.price) {
+    showToast('💎 钻石不足，请先充值');
+    closeModal(); return;
+  }
+  userDiamonds -= track.price;
+  track.unlocked = true;
+  updateDiamondDisplay();
+  closeModal();
+  showToast('🎵 解锁成功！');
+  playTrack(pendingUnlockIndex);
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => toast.classList.remove('show'), 1500);
+}
+
+function togglePlay() {
+  if (audio.paused) { audio.play(); playBtn.textContent = '⏸'; }
+  else { audio.pause(); playBtn.textContent = '▶'; }
+}
+
+function playTrack(index) {
+  loadTrack(index);
+  audio.play();
+  playBtn.textContent = '⏸';
+  document.getElementById('playlistPanel').classList.remove('show');
+  document.getElementById('playlistOverlay').classList.remove('show');
+}
+
+function prevTrack() {
+  let idx = currentIndex - 1;
+  if (idx < 0) idx = playlist.length - 1;
+  loadTrack(idx);
+  if (playlist[idx].unlocked) { audio.play(); playBtn.textContent = '⏸'; }
+}
+
+function nextTrack() {
+  let idx;
+  if (playMode === 'shuffle') { idx = Math.floor(Math.random() * playlist.length); }
+  else { idx = (currentIndex + 1) % playlist.length; }
+  loadTrack(idx);
+  if (playlist[idx].unlocked) { audio.play(); playBtn.textContent = '⏸'; }
+}
+
+function togglePlayMode() {
+  const modes = ['list', 'single', 'shuffle'];
+  const icons = ['🔁', '🔂', '🔀'];
+  const labels = ['列表循环', '单曲循环', '随机播放'];
+  const idx = (modes.indexOf(playMode) + 1) % modes.length;
+  playMode = modes[idx];
+  modeBtn.textContent = icons[idx];
+  modeText.textContent = labels[idx];
+  modeText.classList.add('show');
+  clearTimeout(modeTimeout);
+  modeTimeout = setTimeout(() => modeText.classList.remove('show'), 1200);
+}
+
+function toggleLyrics() {
+  lyricsVisible = !lyricsVisible;
+  lyricsContainer.classList.toggle('hidden', !lyricsVisible);
+  document.getElementById('lyricsToggle').style.color =
+    lyricsVisible ? 'var(--accent)' : 'var(--secondary)';
+}
+
+function togglePlaylist() {
+  document.getElementById('playlistPanel').classList.toggle('show');
+  document.getElementById('playlistOverlay').classList.toggle('show');
+}
+
+function seekTo(e) {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  const targetTime = pct * audio.duration;
+  const track = playlist[currentIndex];
+  if (!track.unlocked && targetTime > track.previewDuration) {
+    showUnlockModal(currentIndex); return;
+  }
+  audio.currentTime = targetTime;
+}
+
+function formatTime(s) {
+  if (isNaN(s)) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+audio.addEventListener('timeupdate', () => {
+  const track = playlist[currentIndex];
+  const pct = (audio.currentTime / audio.duration) * 100;
+  progressFill.style.width = pct + '%';
+  currentTimeEl.textContent = formatTime(audio.currentTime);
+
+  if (!track.unlocked && audio.currentTime >= track.previewDuration) {
+    audio.pause(); playBtn.textContent = '▶';
+    showUnlockModal(currentIndex); return;
+  }
+
+  if (track.lyrics && track.lyrics.length > 0) {
+    let activeIdx = 0;
+    for (let i = track.lyrics.length - 1; i >= 0; i--) {
+      if (audio.currentTime >= track.lyrics[i].time) { activeIdx = i; break; }
+    }
+    const lines = lyricsContainer.querySelectorAll('.lyrics-line');
+    lines.forEach((l, i) => {
+      l.classList.toggle('active', i === activeIdx);
+      if (i === activeIdx) { l.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    });
+  }
+});
+
+audio.addEventListener('loadedmetadata', () => {
+  totalTimeEl.textContent = formatTime(audio.duration);
+  updateLockMarker();
+});
+
+audio.addEventListener('ended', () => {
+  if (playMode === 'single') { audio.currentTime = 0; audio.play(); }
+  else { nextTrack(); }
+});
+
+// Init
+loadTrack(0);
+document.getElementById('lyricsToggle').style.color = 'var(--accent)';
+updateDiamondDisplay();
+</script>
+</body>
+</html>
