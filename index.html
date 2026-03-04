@@ -262,7 +262,7 @@ body {
 
 /* Playlist panel */
 .playlist-panel {
-  position: absolute;
+  position: fixed;
   bottom: 0; left: 0; right: 0;
   background: rgba(20,20,30,0.95);
   backdrop-filter: blur(20px);
@@ -274,8 +274,9 @@ body {
   max-height: 65vh;
   overflow-y: auto;
   visibility: hidden;
+  pointer-events: none;
 }
-.playlist-panel.show { transform: translateY(0); visibility: visible; }
+.playlist-panel.show { transform: translateY(0); visibility: visible; pointer-events: auto; }
 .playlist-header {
   display: flex;
   justify-content: space-between;
