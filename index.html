@@ -523,11 +523,11 @@ body {
 </div>
 
 <!-- Playlist -->
-<div class="playlist-overlay" id="playlistOverlay" onclick="togglePlaylist()"></div>
+<div class="playlist-overlay" id="playlistOverlay" onclick="closePlaylist()"></div>
 <div class="playlist-panel" id="playlistPanel">
   <div class="playlist-header">
     <h3>播放列表 (<span id="playlistCount">0</span>)</h3>
-    <button class="close-btn" onclick="togglePlaylist()">✕</button>
+    <button class="close-btn" onclick="closePlaylist()">✕</button>
   </div>
   <div id="playlistContent"></div>
 </div>
@@ -1822,8 +1822,20 @@ function toggleLyrics() {
 }
 
 function togglePlaylist() {
-  document.getElementById('playlistPanel').classList.toggle('show');
-  document.getElementById('playlistOverlay').classList.toggle('show');
+  const panel = document.getElementById('playlistPanel');
+  const overlay = document.getElementById('playlistOverlay');
+  const isOpen = panel.classList.contains('show');
+  if (isOpen) {
+    panel.classList.remove('show');
+    overlay.classList.remove('show');
+  } else {
+    panel.classList.add('show');
+    overlay.classList.add('show');
+  }
+}
+function closePlaylist() {
+  document.getElementById('playlistPanel').classList.remove('show');
+  document.getElementById('playlistOverlay').classList.remove('show');
 }
 
 function seekTo(e) {
