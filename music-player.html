@@ -1049,7 +1049,7 @@ let hasUpdate = true; // Simulated: user has new conversations → update availa
 // ============================================================
 async function initPlaylist() {
   try {
-    const resp = await fetch('songs/playlist_entries.json');
+    const resp = await fetch('playlist_entries.json');
     const data = await resp.json();
     // All 85 songs loaded — first song has 15s preview, rest fully unlocked
     playlist = data.map((song, i) => ({
@@ -1082,7 +1082,7 @@ function filterLyrics(lyrics) {
 function loadTrack(index) {
   currentIndex = index;
   const track = playlist[index];
-  audio.src = 'songs/' + track.src;
+  audio.src = track.src;
   songNameEl.textContent = track.name;
   songArtistEl.textContent = track.character;
   bgLayer.style.backgroundImage = `url('${track.avatar}')`;
@@ -1146,7 +1146,7 @@ function preloadDurations() {
   playlist.forEach((t, i) => {
     const a = new Audio();
     a.preload = 'metadata';
-    a.src = 'songs/' + t.src;
+    a.src = t.src;
     a.addEventListener('loadedmetadata', () => {
       t._duration = a.duration;
       // Re-render if playlist is visible
