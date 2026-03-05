@@ -414,7 +414,7 @@ setInterval(updateClock, 30000);
 // Load first song info into music widget
 async function loadWidgetInfo() {
   try {
-    const resp = await fetch('songs/playlist_entries.json');
+    const resp = await fetch('playlist_entries.json');
     const data = await resp.json();
     if (data.length > 0) {
       const song = data[0];
