@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Music Player</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --primary: rgba(255,255,255,0.95);
+  --secondary: rgba(255,255,255,0.6);
+  --glass: rgba(0,0,0,0.35);
+  --glass-light: rgba(255,255,255,0.08);
+  --accent: #a78bfa;
+  --diamond: #5ee7f7;
+  --gold: #D4B85C;
+  --gold-bright: #FFD740;
+}
+
+body {
+  font-family: -apple-system, 'SF Pro Display', 'PingFang SC', 'Segoe UI', sans-serif;
+  height: 100vh; width: 100vw;
+  overflow: hidden;
+  color: var(--primary);
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  justify-content: center;
+  background: #000;
+}
+
+.app-shell {
+  width: 100%;
+  max-width: 430px;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+.bg {
+  position: absolute; inset: 0;
+  background-size: cover;
+  background-position: center top;
+  filter: brightness(0.7);
+  z-index: -2;
+  transition: background-image 0.8s ease;
+}
+.bg-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.75) 100%);
+  z-index: -1;
+}
+
+.player {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 24px 40px;
+  position: relative;
+}
+
+/* Top bar */
+.top-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  padding: 50px 24px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.top-bar button {
+  background: none; border: none;
+  color: var(--primary);
+  font-size: 20px;
+  cursor: pointer;
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+.top-bar button:hover { background: var(--glass-light); }
+.top-bar .title-text {
+  font-size: 14px;
+  color: var(--secondary);
+  letter-spacing: 1px;
+}
+.top-right-btns {
+  display: flex; gap: 4px; align-items: center;
+}
+
+/* ========================================
+   UPDATE NOTIFICATION BAR
+   ======================================== */
+.update-bar {
+  position: absolute;
+  top: 100px; left: 16px; right: 16px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 10px 16px;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  transition: opacity 0.3s, transform 0.3s;
+}
+.update-bar.hidden { opacity: 0; transform: translateY(-10px); pointer-events: none; }
+.update-bar-text {
+  font-size: 14px;
+  color: rgba(255,255,255,0.85);
+}
+.update-bar-btn {
+  padding: 7px 16px;
+  border-radius: 20px;
+  border: none;
+  background: var(--gold);
+  color: #2D2200;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.update-bar-btn:active { transform: scale(0.95); }
+
+/* Song info */
+.song-info {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.song-name {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+.song-artist {
+  font-size: 14px;
+  color: var(--secondary);
+}
+
+/* Lyrics */
+.lyrics-container {
+  height: 200px;
+  overflow-y: auto;
+  margin-bottom: 24px;
+  text-align: center;
+  transition: all 0.4s ease;
+  scrollbar-width: none;
+}
+.lyrics-container::-webkit-scrollbar { display: none; }
+.lyrics-container.hidden { height: 0; opacity: 0; margin-bottom: 0; }
+.lyrics-line {
+  font-size: 14px;
+  line-height: 2.2;
+  color: var(--secondary);
+  transition: all 0.3s;
+}
+.lyrics-line.active {
+  color: var(--primary);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* Progress */
+.progress-area { margin-bottom: 18px; position: relative; }
+.progress-bar {
+  width: 100%; height: 4px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+  cursor: pointer;
+  position: relative;
+}
+.progress-bar:hover { height: 6px; }
+.progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 2px;
+  width: 0%;
+  position: relative;
+  transition: width 0.1s linear;
+}
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  right: -6px; top: 50%;
+  transform: translateY(-50%);
+  width: 12px; height: 12px;
+  background: white;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.progress-bar:hover .progress-fill::after { opacity: 1; }
+.progress-lock-marker {
+  position: absolute;
+  top: -8px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+.progress-lock-marker.show { opacity: 1; }
+.time-info {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--secondary);
+}
+
+/* Controls */
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  margin-bottom: 8px;
+}
+.controls button {
+  background: none; border: none;
+  color: var(--primary);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.15s, opacity 0.2s;
+}
+.controls button:active { transform: scale(0.9); }
+.controls .small-btn {
+  font-size: 22px;
+  width: 44px; height: 44px;
+  opacity: 0.7;
+}
+.controls .small-btn:hover { opacity: 1; }
+.controls .play-btn {
+  width: 64px; height: 64px;
+  background: var(--primary);
+  color: #111;
+  border-radius: 50%;
+  font-size: 26px;
+}
+.controls .play-btn:hover { transform: scale(1.05); }
+.controls .skip-btn {
+  font-size: 28px;
+  width: 48px; height: 48px;
+  opacity: 0.85;
+}
+.controls .skip-btn:hover { opacity: 1; }
+
+/* Play mode indicator */
+.play-mode-text {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 50;
+}
+.play-mode-text.show { opacity: 1; }
+
+/* Playlist panel */
+.playlist-panel {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(20,20,30,0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 20px 20px 0 0;
+  padding: 20px 24px 40px;
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+  z-index: 100;
+  max-height: 65vh;
+  overflow-y: auto;
+  pointer-events: none;
+  display: none;
+}
+.playlist-panel.show { transform: translateY(0); pointer-events: auto; display: block; }
+.playlist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.playlist-header h3 { font-size: 16px; font-weight: 600; }
+.playlist-header .close-btn {
+  background: none; border: none;
+  color: var(--secondary);
+  font-size: 18px;
+  cursor: pointer;
+}
+.playlist-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-radius: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  gap: 12px;
+}
+.playlist-item:hover { background: rgba(255,255,255,0.05); }
+.playlist-item.active { color: var(--accent); }
+.playlist-item .pl-avatar {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.playlist-item .info { flex: 1; min-width: 0; }
+.playlist-item .info .name {
+  font-size: 14px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.playlist-item .info .artist {
+  font-size: 12px;
+  color: var(--secondary);
+}
+.playlist-item .duration {
+  font-size: 12px;
+  color: var(--secondary);
+  flex-shrink: 0;
+}
+.playlist-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 99;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.playlist-overlay.show { opacity: 1; pointer-events: auto; }
+
+/* ========================================
+   UNLOCK MODAL (first song — bottom sheet)
+   ======================================== */
+.unlock-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.unlock-overlay.show { opacity: 1; pointer-events: auto; }
+
+.unlock-modal {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: #1A1A1A;
+  border-radius: 24px 24px 0 0;
+  padding: 24px 24px 40px;
+  z-index: 201;
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+  text-align: center;
+  pointer-events: none;
+  display: none;
+}
+.unlock-modal.show { transform: translateY(0); pointer-events: auto; display: block; }
+
+.unlock-modal-close {
+  position: absolute;
+  top: 20px; right: 20px;
+  background: none; border: none;
+  color: rgba(255,255,255,0.6);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.unlock-avatar-card {
+  width: 130px; height: 150px;
+  margin: 16px auto 20px;
+  position: relative;
+}
+.unlock-avatar-card img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 1.5px solid rgba(212,184,92,0.5);
+}
+
+.unlock-modal-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+.unlock-modal-song {
+  font-size: 14px;
+  color: var(--secondary);
+  margin-bottom: 20px;
+}
+.unlock-cta-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 16px;
+  border-radius: 28px;
+  border: none;
+  background: var(--gold-bright);
+  color: #2D2200;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.unlock-cta-btn:active { transform: scale(0.97); }
+
+/* ========================================
+   UPDATE MODAL (bottom sheet — 更新TA的「音乐」)
+   ======================================== */
+.update-modal-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.update-modal-overlay.show { opacity: 1; pointer-events: auto; }
+
+.update-modal {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: #1A1A1A;
+  border-radius: 24px 24px 0 0;
+  padding: 24px 24px 40px;
+  z-index: 201;
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+  text-align: center;
+  pointer-events: none;
+  display: none;
+}
+.update-modal.show { transform: translateY(0); pointer-events: auto; display: block; }
+
+.update-modal-close {
+  position: absolute;
+  top: 20px; right: 20px;
+  background: none; border: none;
+  color: rgba(255,255,255,0.6);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.update-avatar-card {
+  width: 130px; height: 150px;
+  margin: 16px auto 20px;
+  position: relative;
+  border-radius: 14px;
+  overflow: visible;
+}
+.update-avatar-card img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 1.5px solid rgba(212,184,92,0.5);
+}
+/* Sparkles */
+.sparkle {
+  position: absolute;
+  color: #FFD700;
+  font-size: 14px;
+  animation: sparkleAnim 2s ease-in-out infinite;
+}
+.sparkle-tl { top: -6px; left: -6px; animation-delay: 0s; }
+.sparkle-tr { top: -6px; right: -6px; animation-delay: 0.5s; }
+.sparkle-bl { bottom: 8px; left: -6px; animation-delay: 1s; }
+@keyframes sparkleAnim {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+/* Phone badge */
+.update-phone-badge {
+  position: absolute;
+  bottom: -8px; right: -12px;
+  width: 36px; height: 44px;
+  background: #f5f0e8;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px;
+  color: #666;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.update-phone-badge::before {
+  content: 'Updating...';
+  font-size: 7px;
+}
+
+.update-modal-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+.update-modal-desc {
+  font-size: 13px;
+  color: var(--secondary);
+  margin-bottom: 24px;
+}
+
+.update-cta-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 16px;
+  border-radius: 28px;
+  border: none;
+  background: var(--gold-bright);
+  color: #2D2200;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s;
+  margin-bottom: 16px;
+}
+.update-cta-btn:active { transform: scale(0.97); }
+.update-cta-btn .diamond-icon {
+  color: #29B6F6;
+  font-size: 16px;
+}
+
+.update-auto-link {
+  background: none; border: none;
+  color: rgba(255,255,255,0.45);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ========================================
+   AUTO-UPDATE SETTINGS (bottom sheet — 账户)
+   ======================================== */
+.auto-update-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 300;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.auto-update-overlay.show { opacity: 1; pointer-events: auto; }
+
+.auto-update-panel {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: #1A1A1A;
+  border-radius: 24px 24px 0 0;
+  padding: 20px 0 40px;
+  z-index: 301;
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+  max-height: 75vh;
+  overflow-y: auto;
+  pointer-events: none;
+  display: none;
+}
+.auto-update-panel.show { transform: translateY(0); pointer-events: auto; display: block; }
+
+.auto-update-header {
+  text-align: center;
+  padding: 0 20px 16px;
+  position: relative;
+}
+.auto-update-header h3 {
+  font-size: 17px;
+  font-weight: 600;
+}
+.auto-update-header .close-btn {
+  position: absolute;
+  top: 0; right: 20px;
+  background: none; border: none;
+  color: rgba(255,255,255,0.6);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.auto-update-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px 20px;
+}
+.auto-update-profile img {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.auto-update-profile .profile-name {
+  font-size: 16px; font-weight: 500;
+}
+.auto-update-profile .profile-id {
+  font-size: 12px; color: rgba(255,255,255,0.4);
+  margin-top: 2px;
+}
+
+.auto-update-card {
+  margin: 0 16px;
+  background: #252525;
+  border-radius: 16px;
+  padding: 20px;
+}
+.auto-update-card-title {
+  font-size: 17px; font-weight: 600;
+  margin-bottom: 4px;
+  display: flex; align-items: center; gap: 6px;
+}
+.auto-update-card-title .info-icon {
+  font-size: 16px; color: rgba(255,255,255,0.35);
+}
+.auto-update-card-desc {
+  font-size: 12px; color: var(--secondary);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.auto-update-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 0;
+  gap: 12px;
+}
+.auto-update-item + .auto-update-item {
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.auto-update-item-icon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.auto-update-item-info { flex: 1; }
+.auto-update-item-name {
+  font-size: 15px; font-weight: 500;
+}
+.auto-update-item-price {
+  font-size: 12px; color: var(--secondary);
+  margin-top: 2px;
+  display: flex; align-items: center; gap: 3px;
+}
+.auto-update-item-price .diamond { color: #29B6F6; }
+
+/* Toggle switch */
+.toggle-switch {
+  width: 50px; height: 30px;
+  background: #555;
+  border-radius: 15px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.3s;
+  flex-shrink: 0;
+}
+.toggle-switch.on { background: #34c759; }
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  width: 26px; height: 26px;
+  background: white;
+  border-radius: 50%;
+  top: 2px; left: 2px;
+  transition: transform 0.3s;
+}
+.toggle-switch.on::after { transform: translateX(20px); }
+
+/* Toast */
+.toast {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(94,231,247,0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(94,231,247,0.3);
+  color: var(--diamond);
+  padding: 10px 24px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 400;
+}
+.toast.show { opacity: 1; }
+
+/* ========================================
+   APP INFO PAGE (智能体手机 APP 说明)
+   ======================================== */
+.app-info-page {
+  position: absolute; inset: 0;
+  background: #000;
+  z-index: 500;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+  scrollbar-width: none;
+}
+.app-info-page::-webkit-scrollbar { display: none; }
+.app-info-page.show { transform: translateX(0); }
+
+.app-info-header {
+  padding: 50px 20px 16px;
+  display: flex; align-items: center;
+}
+.app-info-back {
+  background: none; border: none;
+  color: var(--primary);
+  font-size: 24px;
+  cursor: pointer;
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+}
+.app-info-hero {
+  display: flex; align-items: flex-start;
+  padding: 16px 24px 24px;
+  gap: 16px;
+}
+.app-info-icon {
+  width: 88px; height: 88px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #FFE4D6, #FFB8A8);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.app-info-icon svg { width: 44px; height: 44px; }
+.app-info-meta {
+  display: flex; flex-direction: column; gap: 4px;
+  padding-top: 4px;
+}
+.app-info-title { font-size: 20px; font-weight: 600; }
+.app-info-sub { font-size: 14px; color: var(--secondary); }
+.app-info-date { font-size: 13px; color: rgba(255,255,255,0.4); }
+.app-info-open-btn {
+  margin-top: 8px;
+  padding: 6px 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: none;
+  color: var(--primary);
+  font-size: 14px;
+  cursor: pointer;
+  width: fit-content;
+}
+.app-info-section { padding: 0 24px; margin-bottom: 24px; }
+.app-info-section-title {
+  font-size: 17px; font-weight: 600;
+  margin-bottom: 12px;
+}
+.app-info-section p {
+  font-size: 14px; line-height: 1.7;
+  color: var(--secondary);
+}
+.app-info-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+  margin: 0 24px 24px;
+}
+.app-info-card {
+  margin: 0 24px 24px;
+  background: #1C1C1E;
+  border-radius: 14px;
+  padding: 16px;
+}
+.app-info-card-row {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.app-info-card-label { font-size: 16px; font-weight: 500; }
+.app-info-card-price {
+  font-size: 13px; color: var(--secondary);
+  margin-top: 4px;
+}
+.app-info-history-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 0;
+}
+.app-info-history-text { font-size: 15px; margin-bottom: 2px; }
+.app-info-history-date { font-size: 13px; color: rgba(255,255,255,0.4); }
+.app-info-history-arrow { color: rgba(255,255,255,0.3); font-size: 18px; }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+<div class="bg" id="bgLayer"></div>
+<div class="bg-overlay"></div>
+
+<div class="player">
+  <div class="top-bar">
+    <button onclick="history.back()">‹</button>
+    <span class="title-text"></span>
+    <div class="top-right-btns">
+      <button onclick="toggleLyrics()" id="lyricsToggle" style="font-size:16px;">词</button>
+      <button onclick="openAppInfo()" style="font-size:18px;">ⓘ</button>
+    </div>
+  </div>
+
+  <!-- Update notification bar -->
+  <div class="update-bar hidden" id="updateBar">
+    <span class="update-bar-text">TA的音乐更新啦</span>
+    <button class="update-bar-btn" onclick="openUpdateModal()">立即更新</button>
+  </div>
+
+  <div class="song-info">
+    <div class="song-name" id="songName"></div>
+    <div class="song-artist" id="songArtist"></div>
+  </div>
+
+  <div class="lyrics-container" id="lyricsContainer"></div>
+
+  <div class="progress-area">
+    <div class="progress-bar" id="progressBar" onclick="seekTo(event)">
+      <div class="progress-fill" id="progressFill"></div>
+      <div class="progress-lock-marker" id="lockMarker">🔒</div>
+    </div>
+    <div class="time-info">
+      <span id="currentTime">0:00</span>
+      <span id="totalTime">0:00</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="small-btn" id="modeBtn" onclick="togglePlayMode()">🔁</button>
+    <button class="skip-btn" onclick="prevTrack()">⏮</button>
+    <button class="play-btn" id="playBtn" onclick="togglePlay()">▶</button>
+    <button class="skip-btn" onclick="nextTrack()">⏭</button>
+    <button class="small-btn" onclick="togglePlaylist()">☰</button>
+  </div>
+
+  <div class="play-mode-text" id="modeText"></div>
+</div>
+
+<!-- Playlist (no lock/diamond, only paid songs appear) -->
+<div class="playlist-overlay" id="playlistOverlay" onclick="togglePlaylist()"></div>
+<div class="playlist-panel" id="playlistPanel">
+  <div class="playlist-header">
+    <h3>播放列表 (<span id="playlistCount">0</span>)</h3>
+    <button class="close-btn" onclick="togglePlaylist()">✕</button>
+  </div>
+  <div id="playlistContent"></div>
+</div>
+
+<!-- Unlock Modal (first song — bottom sheet) -->
+<div class="unlock-overlay" id="unlockOverlay" onclick="closeModal()"></div>
+<div class="unlock-modal" id="unlockModal">
+  <button class="unlock-modal-close" onclick="closeModal()">✕</button>
+
+  <div class="unlock-avatar-card">
+    <img id="modalAvatar" src="" alt="">
+    <span class="sparkle sparkle-tl">✦</span>
+    <span class="sparkle sparkle-tr">✦</span>
+    <span class="sparkle sparkle-bl">✦</span>
+  </div>
+
+  <div class="unlock-modal-title">解锁歌曲</div>
+  <div class="unlock-modal-song" id="modalSongName"></div>
+
+  <button class="unlock-cta-btn" onclick="confirmUnlock()">
+    <span style="color:#29B6F6;">💎</span>
+    <span>100</span>
+    <span>立即解锁</span>
+  </button>
+</div>
+
+<!-- UPDATE MODAL (更新TA的「音乐」) -->
+<div class="update-modal-overlay" id="updateModalOverlay" onclick="closeUpdateModal()"></div>
+<div class="update-modal" id="updateModal">
+  <button class="update-modal-close" onclick="closeUpdateModal()">✕</button>
+
+  <div class="update-avatar-card">
+    <img id="updateAvatar" src="" alt="">
+    <span class="sparkle sparkle-tl">✦</span>
+    <span class="sparkle sparkle-tr">✦</span>
+    <span class="sparkle sparkle-bl">✦</span>
+    <div class="update-phone-badge"></div>
+  </div>
+
+  <div class="update-modal-title">更新TA的「音乐」</div>
+  <div class="update-modal-desc">更新TA的内容，不要错过任何一个精彩瞬间</div>
+
+  <button class="update-cta-btn" onclick="confirmUpdate()">
+    <span class="diamond-icon">💎</span>
+    <span>100</span>
+    <span>立即更新</span>
+  </button>
+
+  <button class="update-auto-link" onclick="openAutoUpdateSettings()">去开启自动更新</button>
+</div>
+
+<!-- AUTO-UPDATE SETTINGS (账户) -->
+<div class="auto-update-overlay" id="autoUpdateOverlay" onclick="closeAutoUpdate()"></div>
+<div class="auto-update-panel" id="autoUpdatePanel">
+  <div class="auto-update-header">
+    <h3>账户</h3>
+    <button class="close-btn" onclick="closeAutoUpdate()">✕</button>
+  </div>
+
+  <div class="auto-update-profile">
+    <img id="autoUpdateAvatar" src="" alt="">
+    <div>
+      <div class="profile-name" id="autoUpdateName">角色名</div>
+      <div class="profile-id" id="autoUpdateId">ID: ---</div>
+    </div>
+  </div>
+
+  <div class="auto-update-card">
+    <div class="auto-update-card-title">
+      自动更新 <span class="info-icon">ⓘ</span>
+    </div>
+    <div class="auto-update-card-desc">
+      开启后，当前智能体触发更新时会自动更新，让你不错过TA的每个瞬间~
+    </div>
+
+    <!-- App list -->
+    <div class="auto-update-item">
+      <div class="auto-update-item-icon" style="background: linear-gradient(135deg, #B388FF, #E040FB);">📷</div>
+      <div class="auto-update-item-info">
+        <div class="auto-update-item-name">相册</div>
+        <div class="auto-update-item-price"><span class="diamond">💎</span> 400 / 次</div>
+      </div>
+      <div class="toggle-switch" onclick="this.classList.toggle('on')"></div>
+    </div>
+
+    <div class="auto-update-item">
+      <div class="auto-update-item-icon" style="background: linear-gradient(135deg, #FF6B6B, #FF8A80);">🎵</div>
+      <div class="auto-update-item-info">
+        <div class="auto-update-item-name">音频</div>
+        <div class="auto-update-item-price"><span class="diamond">💎</span> 100 / 次</div>
+      </div>
+      <div class="toggle-switch" onclick="this.classList.toggle('on')"></div>
+    </div>
+
+    <div class="auto-update-item">
+      <div class="auto-update-item-icon" style="background: linear-gradient(135deg, #FFD54F, #FFC107);">📝</div>
+      <div class="auto-update-item-info">
+        <div class="auto-update-item-name">日记</div>
+        <div class="auto-update-item-price"><span class="diamond">💎</span> 200 / 次</div>
+      </div>
+      <div class="toggle-switch" onclick="this.classList.toggle('on')"></div>
+    </div>
+
+    <div class="auto-update-item">
+      <div class="auto-update-item-icon" style="background: linear-gradient(135deg, #42A5F5, #2196F3);">💬</div>
+      <div class="auto-update-item-info">
+        <div class="auto-update-item-name">短信</div>
+        <div class="auto-update-item-price"><span class="diamond">💎</span> 300 / 次</div>
+      </div>
+      <div class="toggle-switch" onclick="this.classList.toggle('on')"></div>
+    </div>
+
+    <div class="auto-update-item">
+      <div class="auto-update-item-icon" style="background: linear-gradient(135deg, #FF8A80, #FFB8A8);">🎶</div>
+      <div class="auto-update-item-info">
+        <div class="auto-update-item-name">音乐</div>
+        <div class="auto-update-item-price"><span class="diamond">💎</span> 100 / 次</div>
+      </div>
+      <div class="toggle-switch" onclick="this.classList.toggle('on')"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- APP Info Page -->
+<div class="app-info-page" id="appInfoPage">
+  <div class="app-info-header">
+    <button class="app-info-back" onclick="closeAppInfo()">‹</button>
+  </div>
+  <div class="app-info-hero">
+    <div class="app-info-icon">
+      <svg viewBox="0 0 48 48" fill="none">
+        <path d="M20 8v24c0 3.3-2.7 6-6 6s-6-2.7-6-6 2.7-6 6-6c1.1 0 2.1.3 3 .8V12l18-4v22c0 3.3-2.7 6-6 6s-6-2.7-6-6 2.7-6 6-6c1.1 0 2.1.3 3 .8V8L20 8z" fill="#E85D5D"/>
+      </svg>
+    </div>
+    <div class="app-info-meta">
+      <div class="app-info-title">音乐</div>
+      <div class="app-info-sub" id="appInfoCharName">角色名</div>
+      <div class="app-info-date" id="appInfoDate">更新时间</div>
+      <button class="app-info-open-btn" onclick="closeAppInfo()">打开</button>
+    </div>
+  </div>
+  <div class="app-info-divider"></div>
+  <div class="app-info-section">
+    <div class="app-info-section-title">功能介绍</div>
+    <p>基于智能体的设定，音乐应用会根据你与智能体的对话生成专属歌曲。歌曲中的歌词内容只会和你有关，记录你们之间的故事与情感，并且仅为剧情需要生成与他人无关。</p>
+  </div>
+  <div class="app-info-divider"></div>
+  <div class="app-info-section">
+    <div class="app-info-section-title">更新设置</div>
+    <p>更新频次由对话触发，每20-30轮可更新一次。开启自动更新，不错过 TA 的每个精彩瞬间</p>
+  </div>
+  <div class="app-info-card">
+    <div class="app-info-card-row">
+      <div>
+        <div class="app-info-card-label">自动更新</div>
+        <div class="app-info-card-price"><span style="color:#29B6F6">💎</span> 100 / 次</div>
+      </div>
+      <div class="toggle-switch" onclick="this.classList.toggle('on')"></div>
+    </div>
+  </div>
+  <div class="app-info-divider"></div>
+  <div class="app-info-section">
+    <div class="app-info-section-title">更新历史 <span id="historyCount">0</span></div>
+    <div class="app-info-card" style="margin:0; padding: 4px 16px;" id="historyList"></div>
+  </div>
+  <div style="height: 60px;"></div>
+</div>
+
+<audio id="audio" preload="auto"></audio>
+</div>
+
+<script>
+const audio = document.getElementById('audio');
+const playBtn = document.getElementById('playBtn');
+const progressFill = document.getElementById('progressFill');
+const currentTimeEl = document.getElementById('currentTime');
+const totalTimeEl = document.getElementById('totalTime');
+const songNameEl = document.getElementById('songName');
+const songArtistEl = document.getElementById('songArtist');
+const lyricsContainer = document.getElementById('lyricsContainer');
+const modeBtn = document.getElementById('modeBtn');
+const modeText = document.getElementById('modeText');
+const lockMarker = document.getElementById('lockMarker');
+const bgLayer = document.getElementById('bgLayer');
+
+let playlist = [];
+let currentIndex = 0;
+let playMode = 'list';
+let lyricsVisible = true;
+let modeTimeout, toastTimeout;
+let hasUpdate = true; // Simulated: user has new conversations → update available
+
+// ============================================================
+// LOAD PLAYLIST
+// ============================================================
+async function initPlaylist() {
+  try {
+    const resp = await fetch('songs/playlist_entries.json');
+    const data = await resp.json();
+    // All 85 songs loaded — first song has 15s preview, rest fully unlocked
+    playlist = data.map((song, i) => ({
+      ...song,
+      unlocked: i > 0,
+      previewDuration: i === 0 ? 15 : null,
+    }));
+    loadTrack(0);
+    preloadDurations();
+    // Show update bar if there's a pending update
+    if (hasUpdate) {
+      document.getElementById('updateBar').classList.remove('hidden');
+    }
+  } catch (err) {
+    console.error('Failed to load playlist:', err);
+  }
+}
+
+// ============================================================
+// FILTER LYRICS
+// ============================================================
+function filterLyrics(lyrics) {
+  if (!lyrics) return [];
+  return lyrics.filter(l => !l.text.trim().startsWith('♪'));
+}
+
+// ============================================================
+// CORE
+// ============================================================
+function loadTrack(index) {
+  currentIndex = index;
+  const track = playlist[index];
+  audio.src = 'songs/' + track.src;
+  songNameEl.textContent = track.name;
+  songArtistEl.textContent = track.character;
+  bgLayer.style.backgroundImage = `url('${track.avatar}')`;
+  renderLyrics(filterLyrics(track.lyrics));
+  renderPlaylist();
+  updateLockMarker();
+  // Sync info pages
+  document.getElementById('appInfoCharName').textContent = track.character;
+  document.getElementById('appInfoDate').textContent = formatDate() + ' 更新';
+  document.getElementById('updateAvatar').src = track.avatar;
+  document.getElementById('autoUpdateAvatar').src = track.avatar;
+  document.getElementById('autoUpdateName').textContent = track.character;
+  document.getElementById('autoUpdateId').textContent = 'ID: s' + track.id.split('-')[0].slice(0,6);
+}
+
+function formatDate() {
+  const d = new Date();
+  return (d.getMonth()+1).toString().padStart(2,'0') + '-' + d.getDate().toString().padStart(2,'0')
+    + ' ' + d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+}
+
+function updateLockMarker() {
+  const track = playlist[currentIndex];
+  if (!track.unlocked && track.previewDuration && audio.duration) {
+    const pct = (track.previewDuration / audio.duration) * 100;
+    lockMarker.style.left = pct + '%';
+    lockMarker.classList.add('show');
+  } else {
+    lockMarker.classList.remove('show');
+  }
+}
+
+function renderLyrics(lyrics) {
+  if (!lyrics || lyrics.length === 0) {
+    lyricsContainer.innerHTML = '<div class="lyrics-line" style="margin-top:40px;color:var(--secondary)">暂无歌词</div>';
+    return;
+  }
+  lyricsContainer.innerHTML = lyrics.map((l, i) =>
+    `<div class="lyrics-line" data-index="${i}" data-time="${l.time}">${l.text}</div>`
+  ).join('');
+}
+
+function renderPlaylist() {
+  document.getElementById('playlistCount').textContent = playlist.length;
+  document.getElementById('playlistContent').innerHTML = playlist.map((t, i) => {
+    const isActive = i === currentIndex;
+    const dur = t._duration ? formatTime(t._duration) : '--:--';
+    return `<div class="playlist-item ${isActive ? 'active' : ''}" onclick="playTrack(${i})">
+      <img class="pl-avatar" src="${t.avatar}" alt="${t.character}" loading="lazy">
+      <div class="info">
+        <div class="name">${t.name}</div>
+        <div class="artist">${t.character}</div>
+      </div>
+      <span class="duration">${dur}</span>
+    </div>`;
+  }).join('');
+}
+
+// Preload durations for all tracks
+function preloadDurations() {
+  playlist.forEach((t, i) => {
+    const a = new Audio();
+    a.preload = 'metadata';
+    a.src = 'songs/' + t.src;
+    a.addEventListener('loadedmetadata', () => {
+      t._duration = a.duration;
+      // Re-render if playlist is visible
+      const item = document.querySelectorAll('.playlist-item .duration')[i];
+      if (item) item.textContent = formatTime(a.duration);
+    });
+  });
+}
+
+// ============================================================
+// FIRST SONG UNLOCK (preview → pay)
+// ============================================================
+function showUnlockModal() {
+  const track = playlist[0];
+  document.getElementById('modalAvatar').src = track.avatar;
+  document.getElementById('modalSongName').textContent = `${track.character}《${track.name}》`;
+  document.getElementById('unlockOverlay').classList.add('show');
+  document.getElementById('unlockModal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('unlockOverlay').classList.remove('show');
+  document.getElementById('unlockModal').classList.remove('show');
+}
+
+function confirmUnlock() {
+  playlist[0].unlocked = true;
+  closeModal();
+  showToast('🎵 解锁成功！');
+  audio.play();
+  playBtn.textContent = '⏸';
+  updateLockMarker();
+}
+
+// ============================================================
+// UPDATE MODAL (generate new song)
+// ============================================================
+function openUpdateModal() {
+  const track = playlist[currentIndex];
+  document.getElementById('updateAvatar').src = track.avatar;
+  document.getElementById('updateModalOverlay').classList.add('show');
+  document.getElementById('updateModal').classList.add('show');
+}
+
+function closeUpdateModal() {
+  document.getElementById('updateModalOverlay').classList.remove('show');
+  document.getElementById('updateModal').classList.remove('show');
+}
+
+function confirmUpdate() {
+  closeUpdateModal();
+  // Navigate back to phone with updating state
+  const t = document.getElementById('toast');
+  t.textContent = '🎶 正在生成...';
+  t.classList.add('show');
+  setTimeout(() => {
+    window.location.href = 'phone.html?updating=true';
+  }, 500);
+}
+
+// ============================================================
+// AUTO-UPDATE SETTINGS
+// ============================================================
+function openAutoUpdateSettings() {
+  closeUpdateModal();
+  document.getElementById('autoUpdateOverlay').classList.add('show');
+  document.getElementById('autoUpdatePanel').classList.add('show');
+}
+
+function closeAutoUpdate() {
+  document.getElementById('autoUpdateOverlay').classList.remove('show');
+  document.getElementById('autoUpdatePanel').classList.remove('show');
+}
+
+// ============================================================
+// PLAYBACK
+// ============================================================
+function togglePlay() {
+  if (audio.paused) { audio.play(); playBtn.textContent = '⏸'; }
+  else { audio.pause(); playBtn.textContent = '▶'; }
+}
+
+function playTrack(index) {
+  loadTrack(index);
+  audio.play();
+  playBtn.textContent = '⏸';
+  document.getElementById('playlistPanel').classList.remove('show');
+  document.getElementById('playlistOverlay').classList.remove('show');
+}
+
+function prevTrack() {
+  let idx = currentIndex - 1;
+  if (idx < 0) idx = playlist.length - 1;
+  loadTrack(idx);
+  if (playlist[idx].unlocked) { audio.play(); playBtn.textContent = '⏸'; }
+}
+
+function nextTrack() {
+  let idx;
+  if (playMode === 'shuffle') { idx = Math.floor(Math.random() * playlist.length); }
+  else { idx = (currentIndex + 1) % playlist.length; }
+  loadTrack(idx);
+  if (playlist[idx].unlocked) { audio.play(); playBtn.textContent = '⏸'; }
+}
+
+function togglePlayMode() {
+  const modes = ['list', 'single', 'shuffle'];
+  const icons = ['🔁', '🔂', '🔀'];
+  const labels = ['列表循环', '单曲循环', '随机播放'];
+  const idx = (modes.indexOf(playMode) + 1) % modes.length;
+  playMode = modes[idx];
+  modeBtn.textContent = icons[idx];
+  modeText.textContent = labels[idx];
+  modeText.classList.add('show');
+  clearTimeout(modeTimeout);
+  modeTimeout = setTimeout(() => modeText.classList.remove('show'), 1200);
+}
+
+function toggleLyrics() {
+  lyricsVisible = !lyricsVisible;
+  lyricsContainer.classList.toggle('hidden', !lyricsVisible);
+  document.getElementById('lyricsToggle').style.color =
+    lyricsVisible ? 'var(--accent)' : 'var(--secondary)';
+}
+
+function togglePlaylist() {
+  document.getElementById('playlistPanel').classList.toggle('show');
+  document.getElementById('playlistOverlay').classList.toggle('show');
+}
+
+function seekTo(e) {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  const targetTime = pct * audio.duration;
+  const track = playlist[currentIndex];
+  if (!track.unlocked && track.previewDuration && targetTime > track.previewDuration) {
+    showUnlockModal(); return;
+  }
+  audio.currentTime = targetTime;
+}
+
+function formatTime(s) {
+  if (isNaN(s)) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => toast.classList.remove('show'), 1500);
+}
+
+// ============================================================
+// APP INFO PAGE
+// ============================================================
+function openAppInfo() {
+  const track = playlist[currentIndex];
+  document.getElementById('appInfoCharName').textContent = track.character;
+  document.getElementById('appInfoDate').textContent = formatDate() + ' 更新';
+  const historyList = document.getElementById('historyList');
+  historyList.innerHTML = playlist.map((t, i) => `
+    <div class="app-info-history-item">
+      <div>
+        <div class="app-info-history-text">生成了《${t.name}》</div>
+        <div class="app-info-history-date">${formatDate()}</div>
+      </div>
+      <span class="app-info-history-arrow">›</span>
+    </div>`).join('');
+  document.getElementById('historyCount').textContent = playlist.length;
+  document.getElementById('appInfoPage').classList.add('show');
+}
+
+function closeAppInfo() {
+  document.getElementById('appInfoPage').classList.remove('show');
+}
+
+// ============================================================
+// AUDIO EVENTS
+// ============================================================
+audio.addEventListener('timeupdate', () => {
+  const track = playlist[currentIndex];
+  const pct = (audio.currentTime / audio.duration) * 100;
+  progressFill.style.width = pct + '%';
+  currentTimeEl.textContent = formatTime(audio.currentTime);
+
+  // First song preview lock
+  if (!track.unlocked && track.previewDuration && audio.currentTime >= track.previewDuration) {
+    audio.pause(); playBtn.textContent = '▶';
+    showUnlockModal(); return;
+  }
+
+  const filtered = filterLyrics(track.lyrics);
+  if (filtered.length > 0) {
+    let activeIdx = 0;
+    for (let i = filtered.length - 1; i >= 0; i--) {
+      if (audio.currentTime >= filtered[i].time) { activeIdx = i; break; }
+    }
+    const lines = lyricsContainer.querySelectorAll('.lyrics-line');
+    lines.forEach((l, i) => {
+      l.classList.toggle('active', i === activeIdx);
+      if (i === activeIdx) { l.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    });
+  }
+});
+
+audio.addEventListener('loadedmetadata', () => {
+  totalTimeEl.textContent = formatTime(audio.duration);
+  updateLockMarker();
+});
+
+audio.addEventListener('ended', () => {
+  if (playMode === 'single') { audio.currentTime = 0; audio.play(); }
+  else { nextTrack(); }
+});
+
+// ============================================================
+// INIT
+// ============================================================
+document.getElementById('lyricsToggle').style.color = 'var(--accent)';
+initPlaylist();
+</script>
+</body>
+</html>
