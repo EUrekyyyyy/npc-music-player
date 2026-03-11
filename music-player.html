@@ -1176,8 +1176,7 @@ function confirmUnlock() {
   playlist[0].unlocked = true;
   closeModal();
   showToast('🎵 解锁成功！');
-  audio.play();
-  playBtn.textContent = '⏸';
+  audio.play().then(() => { playBtn.textContent = '⏸'; }).catch(() => {});
   updateLockMarker();
 }
 
@@ -1231,8 +1230,7 @@ function togglePlay() {
 
 function playTrack(index) {
   loadTrack(index);
-  audio.play();
-  playBtn.textContent = '⏸';
+  audio.play().then(() => { playBtn.textContent = '⏸'; }).catch(() => {});
   document.getElementById('playlistPanel').classList.remove('show');
   document.getElementById('playlistOverlay').classList.remove('show');
 }
@@ -1241,7 +1239,7 @@ function prevTrack() {
   let idx = currentIndex - 1;
   if (idx < 0) idx = playlist.length - 1;
   loadTrack(idx);
-  if (playlist[idx].unlocked) { audio.play(); playBtn.textContent = '⏸'; }
+  audio.play().then(() => { playBtn.textContent = '⏸'; }).catch(() => {});
 }
 
 function nextTrack() {
@@ -1249,7 +1247,7 @@ function nextTrack() {
   if (playMode === 'shuffle') { idx = Math.floor(Math.random() * playlist.length); }
   else { idx = (currentIndex + 1) % playlist.length; }
   loadTrack(idx);
-  if (playlist[idx].unlocked) { audio.play(); playBtn.textContent = '⏸'; }
+  audio.play().then(() => { playBtn.textContent = '⏸'; }).catch(() => {});
 }
 
 function togglePlayMode() {
@@ -1364,6 +1362,10 @@ audio.addEventListener('loadedmetadata', () => {
 audio.addEventListener('ended', () => {
   if (playMode === 'single') { audio.currentTime = 0; audio.play(); }
   else { nextTrack(); }
+});
+
+audio.addEventListener('error', () => {
+  setTimeout(() => nextTrack(), 500);
 });
 
 // ============================================================
